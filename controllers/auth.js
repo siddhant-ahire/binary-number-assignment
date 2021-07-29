@@ -22,21 +22,43 @@ exports.signup = (req,res) => {
         let errorMessage = error.array();
         return res.status(400).json({error:errorMessage[0].msg})
     }
-    console.log(req.body.password)
     const salt = uuidv1();
     const hashed_password = encryptPassword(salt, req.body.password)
-
-    pool.query(`INSERT INTO users(username, password, role, salt) values('${req.body.username}','${hashed_password}',${req.body.role},'${salt}')`,
-    (err, rows) => {
+    console.log(req.body.username,req.body.password,salt,hashed_password)
+    pool.query(`select * from users where username = '${req.body.username}'`,(err,users)=> {
         if(err){
             console.log(err)
             return res.status(400).json({
                 error:'account not created please signup again'
             })
         }
-        return res.status(200).json({
-            error:'account created successfully'
+        if(users.length !== 0 ){
+            return res.json({
+                error:'user is already exitst!'
+            })
+        }
+        pool.query(`INSERT INTO users(username, password, role, salt) values('${req.body.username}','${hashed_password}',${req.body.role},'${salt}')`,
+        (err, rows) => {
+            if(err){
+                console.log(err)
+                return res.status(400).json({
+                    error:'account not created please signup again'
+                })
+            }
+            console.log(rows.insertId)
+            pool.query(`INSERT INTO accounts(action, amount, created_at, u_id, current_amount) 
+            values('initial',0,now(),${rows.insertId},0)`,(err,rows)=> {
+                if(err || rows.length === 0){
+                    return res.status(400).json({
+                        error:'something went wrong'
+                    })
+                }
+                return res.status(200).json({
+                message:'account created successfully'
+            })
         })
+        })
+        
     })
 
 }
@@ -95,6 +117,15 @@ exports.isAdmin = (req,res,next) =>{
     if(req.profile.role === 0) {
         return res.status(403).json({
             error:'Admin resourse! Access denied'
+        })
+    }
+    next();
+}
+
+exports.isNotAdmin = (req,res,next) =>{
+    if(req.profile.role === 1) {
+        return res.status(403).json({
+            error:'Not a banker resourse! Access denied'
         })
     }
     next();

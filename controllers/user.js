@@ -33,7 +33,7 @@ exports.read = (req,res) => {
 
 exports.getTransaction = (req, res) => {
     const {user_id} = req.account;
-    pool.query(`select * from accounts where u_id = ${user_id}`,(err,rows)=> {
+    pool.query(`select * from accounts where u_id = ${user_id} order by transaction_id desc`,(err,rows)=> {
         if(err || rows.length === 0){
             return res.status(400).json({
                 error:'accounts not found'
@@ -46,7 +46,7 @@ exports.getTransaction = (req, res) => {
 
 exports.accounts = (req, res) => {
     const {user_id} = req.profile;
-    pool.query(`select * from accounts where u_id = ${user_id}`,(err,rows)=> {
+    pool.query(`select * from accounts where u_id = ${user_id} order by transaction_id desc`,(err,rows)=> {
         if(err || rows.length === 0){
             return res.status(400).json({
                 error:'accounts not found'
@@ -60,8 +60,12 @@ exports.accounts = (req, res) => {
 
 
 exports.addTransaction = (req, res) => {
-    const {action, amount} = req.body;
+    const {action} = req.body;
+    const amount = parseInt(req.body.amount);
     const {user_id} = req.profile;
+    if(amount==0){
+        return res.json({error:'please enter valid amount'})
+    }
     const c_a = (current_amount) => {
         if(current_amount >= 0){
             let c_amount=0
@@ -73,19 +77,23 @@ exports.addTransaction = (req, res) => {
                     c_amount = current_amount - amount
                 }
              else {
-                return res.json({message:'please check your balance'})
+                return res.json({error:'please check your balance'})
             }
         }
+        if(action !== 'deposite' && action !=='withdraw'){
+            return res.json({error:'Please select Action to perform'})
+        }
+        console.log(action, amount, user_id)
             pool.query(`INSERT INTO accounts(action, amount, created_at, u_id, current_amount) 
         values('${action}',${amount},now(),${user_id},${c_amount}) `,(err,rows)=> {
+            console.log(c_amount)
             if(err || rows.length === 0){
                 return res.status(400).json({
-                    error:'accounts not found'
+                    error:'Transaction cancelled'
                 })
             }
-            console.log(c_amount)
             return res.status(200).json({
-                message:'Transaction successfull'
+                amount
             });
             
         })
@@ -103,13 +111,26 @@ exports.addTransaction = (req, res) => {
 }
 
 exports.listUsers = (req, res, next) => {
-    pool.query('select * from users where role = 0',(err, rows) => {
+    pool.query('select a.user_id,a.username,b.current_amount,b.u_id,b.transaction_id from users a, accounts b where a.role = 0 and a.user_id=b.u_id order by transaction_id desc',(err, rows) => {
         if(err || rows.length === 0){
             console.log(err)
             return res.status(400).json({
                 error:'Users not found'
             })
         }
-        return res.json(rows)
+
+        const groupBy = (array, key) => {
+            return array.reduce((result, currentValue)=>{
+                (result[currentValue[key]]= result[currentValue[key]] || []).push(
+                    currentValue
+                );
+                return result;
+            },{});
+        }
+        const rowsGroupedByUserId = groupBy(rows, 'user_id')
+        const users = Object.entries(rowsGroupedByUserId).map((v,k)=>{
+            return v[1][0]
+        })
+        res.status(200).json(users)
     })
 }
