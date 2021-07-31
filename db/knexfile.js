@@ -22,9 +22,10 @@ module.exports = {
   production: {
     client: 'mysql',
     connection: {
-      database: 'knex_test',
-      user:     'root',
-      password: 'password'
+      host:process.env.DATABASE_HOST,
+      database: process.env.DATABASE_NAME,
+      user:     process.env.DATABASE_USER,
+      password: process.env.DATABASE_PASSWORD
     },
     pool: {
       min: 2,
